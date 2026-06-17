@@ -1,0 +1,15 @@
+{% from "macros.html" import icon %}
+{% extends "base.html" %}
+{% block title %}Ошибка {{ code }}{% endblock %}
+
+{% block content %}
+<div class="error-page">
+    <div class="error-icon">{{ icon('warning', 80) }}</div>
+    <div class="error-code">{{ code }}</div>
+    <h2>{{ message }}</h2>
+    <a href="{{ url_for('browse') }}" class="btn btn-primary">
+        <span class="btn-icon-svg">{{ icon('arrow-left', 16) }}</span>
+        На главную
+    </a>
+</div>
+{% endblock %}

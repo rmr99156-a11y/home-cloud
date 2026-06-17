@@ -1,0 +1,109 @@
+{% from "macros.html" import icon %}
+{% extends "base.html" %}
+{% block title %}Настройки — Домашнее облако{% endblock %}
+
+{% block content %}
+<button class="menu-toggle" id="menuToggle" aria-label="Меню">{{ icon('menu', 22) }}</button>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<div class="app-layout">
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <span class="logo">{{ icon('cloud', 26) }}</span>
+            <span class="title">Домашнее облако</span>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="{{ url_for('browse') }}" class="nav-item">
+                <span class="nav-icon">{{ icon('files', 18) }}</span>
+                <span>Мои файлы</span>
+            </a>
+            <a href="{{ url_for('settings') }}" class="nav-item active">
+                <span class="nav-icon">{{ icon('settings', 18) }}</span>
+                <span>Настройки</span>
+            </a>
+            <a href="{{ url_for('logout') }}" class="nav-item nav-logout">
+                <span class="nav-icon">{{ icon('logout', 18) }}</span>
+                <span>Выйти</span>
+            </a>
+        </nav>
+        <div class="sidebar-user">
+            <span class="user-icon">{{ icon('user', 16) }}</span>
+            <span>{{ username }}</span>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="content-header">
+            <div class="header-left">
+                <h1>Настройки</h1>
+            </div>
+        </header>
+
+        <section class="settings-card">
+            <h2>Учётная запись</h2>
+            {% if must_change_password %}
+            <div class="warning-banner">
+                <span class="warning-icon">{{ icon('warning', 18) }}</span>
+                <span>Установлен пароль по умолчанию. Смените его!</span>
+            </div>
+            {% endif %}
+
+            <form method="post" class="settings-form">
+                <div class="form-group">
+                    <label for="username">Логин</label>
+                    <input type="text" id="username" name="username"
+                           value="{{ username }}" required>
+                </div>
+                <div class="form-group">
+                    <label for="old_password">Текущий пароль</label>
+                    <input type="password" id="old_password" name="old_password" required>
+                </div>
+                <div class="form-group">
+                    <label for="new_password">Новый пароль</label>
+                    <input type="password" id="new_password" name="new_password"
+                           placeholder="Оставьте пустым, чтобы не менять">
+                    <small>Минимум 6 символов</small>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <span class="btn-icon-svg">{{ icon('save', 16) }}</span>
+                    Сохранить
+                </button>
+            </form>
+        </section>
+
+        <section class="settings-card">
+            <h2>Информация о сервере</h2>
+            <div class="info-grid">
+                <div class="info-row">
+                    <span>Локальный доступ</span>
+                    <code>http://127.0.0.1:8000</code>
+                </div>
+                <div class="info-row">
+                    <span>Папка хранилища</span>
+                    <code>storage/</code>
+                </div>
+                <div class="info-row">
+                    <span>Макс. размер файла</span>
+                    <code>1 ГБ</code>
+                </div>
+                <div class="info-row">
+                    <span>Версия</span>
+                    <code>2.0.0</code>
+                </div>
+            </div>
+        </section>
+    </main>
+</div>
+
+<script>
+const menuToggle = document.getElementById('menuToggle');
+const sidebar = document.getElementById('sidebar');
+const overlay = document.getElementById('sidebarOverlay');
+function toggleSidebar() {
+    sidebar.classList.toggle('open');
+    overlay.classList.toggle('open');
+}
+if (menuToggle) menuToggle.addEventListener('click', toggleSidebar);
+if (overlay) overlay.addEventListener('click', toggleSidebar);
+</script>
+{% endblock %}

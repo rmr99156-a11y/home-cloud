@@ -1,0 +1,50 @@
+{% from "macros.html" import icon %}
+{% extends "base.html" %}
+{% block title %}Вход — Домашнее облако{% endblock %}
+
+{% block content %}
+<div class="login-wrapper">
+    <div class="login-card">
+        <div class="login-logo">
+            <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <defs>
+                    <linearGradient id="cloudGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#4ade80"/>
+                        <stop offset="100%" stop-color="#22c55e"/>
+                    </linearGradient>
+                </defs>
+                <path d="M17.5 19a4.5 4.5 0 1 0 0-9h-1.8A7 7 0 1 0 4 14.9" stroke="url(#cloudGrad)"/>
+                <path d="M4 14.9h13.5" stroke="url(#cloudGrad)"/>
+                <path d="M8 19h2M11 19h2" stroke="url(#cloudGrad)" stroke-width="2"/>
+            </svg>
+        </div>
+        <h1>Домашнее облако</h1>
+        <p class="login-subtitle">Войдите, чтобы получить доступ к файлам</p>
+
+        <form method="post" class="login-form">
+            <div class="form-group">
+                <label for="username">Логин</label>
+                <input type="text" id="username" name="username"
+                       placeholder="Введите логин" required autofocus
+                       value="admin">
+            </div>
+            <div class="form-group">
+                <label for="password">Пароль</label>
+                <input type="password" id="password" name="password"
+                       placeholder="Введите пароль" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">
+                Войти
+                <span class="btn-icon-svg">{{ icon('arrow-right', 16) }}</span>
+            </button>
+        </form>
+
+        <div class="login-hint">
+            <strong>Данные по умолчанию:</strong><br>
+            Логин: <code>admin</code><br>
+            Пароль: <code>admin</code><br>
+            <small>Обязательно смените пароль после входа.</small>
+        </div>
+    </div>
+</div>
+{% endblock %}

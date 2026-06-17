@@ -1,0 +1,406 @@
+{% from "macros.html" import icon, file_icon %}
+{% extends "base.html" %}
+{% block title %}Файлы — Домашнее облако{% endblock %}
+
+{% block content %}
+<button class="menu-toggle" id="menuToggle" aria-label="Меню">{{ icon('menu', 22) }}</button>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<div class="app-layout">
+    <!-- Сайдбар -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <span class="logo">{{ icon('cloud', 26) }}</span>
+            <span class="title">Домашнее облако</span>
+        </div>
+
+        <nav class="sidebar-nav">
+            <a href="{{ url_for('browse') }}" class="nav-item {% if not search_query %}active{% endif %}">
+                <span class="nav-icon">{{ icon('files', 18) }}</span>
+                <span>Мои файлы</span>
+            </a>
+            <a href="{{ url_for('settings') }}" class="nav-item">
+                <span class="nav-icon">{{ icon('settings', 18) }}</span>
+                <span>Настройки</span>
+            </a>
+            <a href="{{ url_for('logout') }}" class="nav-item nav-logout">
+                <span class="nav-icon">{{ icon('logout', 18) }}</span>
+                <span>Выйти</span>
+            </a>
+        </nav>
+
+        <!-- Индикатор свободного места -->
+        <div class="storage-widget">
+            <div class="storage-header">
+                <span class="storage-label">{{ icon('hard-drive', 14) }} Хранилище</span>
+                <span class="storage-percent">{{ disk.used_percent }}%</span>
+            </div>
+            <div class="storage-bar">
+                <div class="storage-bar-fill" style="width: {{ disk.used_percent }}%;"></div>
+                <div class="storage-bar-cloud" style="width: {{ disk.cloud_percent }}%;"></div>
+            </div>
+            <div class="storage-details">
+                <div class="storage-row">
+                    <span class="storage-row-label">Занято диском</span>
+                    <span class="storage-row-value">{{ disk.used_h }}</span>
+                </div>
+                <div class="storage-row">
+                    <span class="storage-row-label">Облако</span>
+                    <span class="storage-row-value storage-cloud">{{ disk.cloud_used_h }}</span>
+                </div>
+                <div class="storage-row storage-row-free">
+                    <span class="storage-row-label">Свободно</span>
+                    <span class="storage-row-value storage-free">{{ disk.free_h }}</span>
+                </div>
+            </div>
+            <div class="storage-total">
+                Всего: <strong>{{ disk.total_h }}</strong>
+            </div>
+        </div>
+
+        <div class="sidebar-stats">
+            <div class="stat-row">
+                <span class="stat-label">Файлов</span>
+                <span class="stat-value">{{ total_files }}</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Размер</span>
+                <span class="stat-value">{{ total_size }}</span>
+            </div>
+        </div>
+
+        <div class="sidebar-qr">
+            <h4>QR-код для входа с телефона</h4>
+            <img src="data:image/png;base64,{{ qr_code }}" alt="QR-код для входа">
+            <p class="qr-hint">{{ lan_url }}</p>
+        </div>
+
+        <div class="sidebar-user">
+            <span class="user-icon">{{ icon('user', 16) }}</span>
+            <span>{{ username }}</span>
+        </div>
+    </aside>
+
+    <!-- Основной контент -->
+    <main class="main-content">
+        {% if must_change_password %}
+        <div class="warning-banner">
+            <span class="warning-icon">{{ icon('warning', 18) }}</span>
+            <span>Используется пароль по умолчанию.</span>
+            <a href="{{ url_for('settings') }}">Сменить →</a>
+        </div>
+        {% endif %}
+
+        <header class="content-header">
+            <div class="header-left">
+                <h1>
+                    {% if is_search %}Результаты поиска: «{{ search_query }}»
+                    {% else %}Мои файлы{% endif %}
+                </h1>
+
+                {% if not is_search and breadcrumbs %}
+                <nav class="breadcrumbs">
+                    <a href="{{ url_for('browse') }}">{{ icon('home', 14) }} Главная</a>
+                    {% for crumb in breadcrumbs %}
+                        <span class="breadcrumb-sep">/</span>
+                        <a href="{{ url_for('browse', rel_path=crumb.path) }}">{{ crumb.name }}</a>
+                    {% endfor %}
+                </nav>
+                {% endif %}
+            </div>
+
+            <div class="header-right">
+                <form action="{{ url_for('search') }}" method="get" class="search-form">
+                    <span class="search-icon">{{ icon('search', 16) }}</span>
+                    <input type="text" name="q" placeholder="Поиск файлов..."
+                           value="{{ search_query or '' }}">
+                </form>
+            </div>
+        </header>
+
+        {% if not is_search %}
+        <section class="actions-bar">
+            <form method="post" enctype="multipart/form-data" action="{{ url_for('upload') }}" class="upload-form" id="uploadForm">
+                <input type="hidden" name="path" value="{{ current_path }}">
+                <label for="fileInput" class="btn btn-primary">
+                    <span class="btn-icon-svg">{{ icon('upload', 16) }}</span>
+                    Загрузить
+                </label>
+                <input type="file" name="files" id="fileInput" multiple style="display:none" onchange="document.getElementById('uploadForm').submit()">
+            </form>
+
+            <form method="post" action="{{ url_for('create_folder') }}" class="folder-form">
+                <input type="hidden" name="path" value="{{ current_path }}">
+                <input type="text" name="name" placeholder="Новая папка..." required>
+                <button type="submit" class="btn btn-secondary" title="Создать папку">
+                    <span class="btn-icon-svg">{{ icon('folder', 16) }}</span>
+                </button>
+            </form>
+
+            <div class="dragzone" id="dragzone">
+                Перетащите файлы сюда
+            </div>
+        </section>
+        {% endif %}
+
+        <!-- Вид таблицей (десктоп) -->
+        <section class="files-grid">
+            {% if is_search and not files %}
+                <div class="empty-state">
+                    <div class="empty-icon">{{ icon('search', 64) }}</div>
+                    <p>Ничего не найдено по запросу «{{ search_query }}»</p>
+                </div>
+            {% elif not dirs and not files and not is_search %}
+                <div class="empty-state">
+                    <div class="empty-icon">{{ icon('folder', 64) }}</div>
+                    <p>Эта папка пуста</p>
+                    <small>Загрузите файлы или создайте новую папку</small>
+                </div>
+            {% elif dirs or files %}
+                <table class="files-table">
+                    <thead>
+                        <tr>
+                            <th>Имя</th>
+                            <th>Размер</th>
+                            <th>Изменён</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if not is_search and breadcrumbs %}
+                        <tr class="folder-up">
+                            <td colspan="4">
+                                <a href="{{ url_for('browse', rel_path=breadcrumbs[-1].path.rsplit('/', 1)[0] if '/' in breadcrumbs[-1].path else '') }}" class="file-link">
+                                    <span class="file-icon-svg">{{ icon('folder-up', 18) }}</span>
+                                    ..
+                                </a>
+                            </td>
+                        </tr>
+                        {% endif %}
+
+                        {% for d in dirs %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('browse', rel_path=d.path) }}" class="file-link">
+                                    <span class="file-icon-svg folder-color">{{ icon('folder', 18) }}</span>
+                                    {{ d.name }}
+                                </a>
+                            </td>
+                            <td>{{ d.size }}</td>
+                            <td>{{ d.modified }}</td>
+                            <td class="actions-cell">
+                                <form method="post" action="{{ url_for('delete', rel_path=d.path) }}"
+                                      onsubmit="return confirm('Удалить папку «{{ d.name }}» со всем содержимым?')">
+                                    <button type="submit" class="btn-icon" title="Удалить">{{ icon('trash', 16) }}</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+
+                        {% for f in files %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('browse', rel_path=f.path) }}" class="file-link">
+                                    <span class="file-icon-svg {{ file_icon(f.name) }}">{{ icon(file_icon(f.name), 18) }}</span>
+                                    {{ f.name }}
+                                </a>
+                            </td>
+                            <td>{{ f.size }}</td>
+                            <td>{{ f.modified }}</td>
+                            <td class="actions-cell">
+                                <a href="{{ url_for('download', rel_path=f.path) }}" class="btn-icon" title="Скачать">{{ icon('download', 16) }}</a>
+                                <button type="button" class="btn-icon" title="Поделиться" onclick="shareFile('{{ f.path }}')">{{ icon('share', 16) }}</button>
+                                <form method="post" action="{{ url_for('delete', rel_path=f.path) }}"
+                                      onsubmit="return confirm('Удалить файл «{{ f.name }}»?')">
+                                    <button type="submit" class="btn-icon" title="Удалить">{{ icon('trash', 16) }}</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+        </section>
+
+        <!-- Карточный вид (мобильный) -->
+        <section class="files-cards">
+            {% if is_search and not files %}
+                <div class="empty-state">
+                    <div class="empty-icon">{{ icon('search', 64) }}</div>
+                    <p>Ничего не найдено</p>
+                </div>
+            {% elif not dirs and not files and not is_search %}
+                <div class="empty-state">
+                    <div class="empty-icon">{{ icon('folder', 64) }}</div>
+                    <p>Эта папка пуста</p>
+                </div>
+            {% elif dirs or files %}
+                {% if not is_search and breadcrumbs %}
+                <a href="{{ url_for('browse', rel_path=breadcrumbs[-1].path.rsplit('/', 1)[0] if '/' in breadcrumbs[-1].path else '') }}" class="file-card">
+                    <div class="file-card-icon">{{ icon('folder-up', 28) }}</div>
+                    <div class="file-card-info">
+                        <div class="file-card-name">Назад</div>
+                        <div class="file-card-meta">Родительская папка</div>
+                    </div>
+                </a>
+                {% endif %}
+
+                {% for d in dirs %}
+                <div class="file-card">
+                    <a href="{{ url_for('browse', rel_path=d.path) }}" class="file-card-icon folder-color">{{ icon('folder', 28) }}</a>
+                    <div class="file-card-info">
+                        <div class="file-card-name"><a href="{{ url_for('browse', rel_path=d.path) }}">{{ d.name }}</a></div>
+                        <div class="file-card-meta">
+                            <span>Папка</span>
+                            <span>{{ d.modified }}</span>
+                        </div>
+                    </div>
+                    <div class="file-card-actions">
+                        <form method="post" action="{{ url_for('delete', rel_path=d.path) }}"
+                              onsubmit="return confirm('Удалить «{{ d.name }}»?')">
+                            <button type="submit" class="btn-icon" title="Удалить">{{ icon('trash', 18) }}</button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+
+                {% for f in files %}
+                <div class="file-card">
+                    <a href="{{ url_for('browse', rel_path=f.path) }}" class="file-card-icon {{ file_icon(f.name) }}">
+                        {{ icon(file_icon(f.name), 28) }}
+                    </a>
+                    <div class="file-card-info">
+                        <div class="file-card-name"><a href="{{ url_for('browse', rel_path=f.path) }}">{{ f.name }}</a></div>
+                        <div class="file-card-meta">
+                            <span>{{ f.size }}</span>
+                            <span>{{ f.modified }}</span>
+                        </div>
+                    </div>
+                    <div class="file-card-actions">
+                        <a href="{{ url_for('download', rel_path=f.path) }}" class="btn-icon" title="Скачать">{{ icon('download', 18) }}</a>
+                        <button type="button" class="btn-icon" title="Поделиться" onclick="shareFile('{{ f.path }}')">{{ icon('share', 18) }}</button>
+                        <form method="post" action="{{ url_for('delete', rel_path=f.path) }}"
+                              onsubmit="return confirm('Удалить «{{ f.name }}»?')">
+                            <button type="submit" class="btn-icon" title="Удалить">{{ icon('trash', 18) }}</button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            {% endif %}
+        </section>
+
+        <!-- Плавающая кнопка загрузки (мобильная) -->
+        <button class="fab-upload" id="fabUpload" title="Загрузить файл">{{ icon('plus', 24) }}</button>
+    </main>
+</div>
+
+<!-- Модальное окно для шаринга -->
+<div id="shareModal" class="modal" style="display:none">
+    <div class="modal-content">
+        <h3><span class="modal-icon">{{ icon('link', 20) }}</span> Публичная ссылка</h3>
+        <p>Эта ссылка доступна без авторизации. Скопируйте и передайте кому нужно.</p>
+        <input type="text" id="shareUrl" readonly class="share-input">
+        <div class="modal-actions">
+            <button onclick="copyShareUrl()" class="btn btn-primary">
+                <span class="btn-icon-svg">{{ icon('copy', 16) }}</span>
+                Копировать
+            </button>
+            <button onclick="closeModal()" class="btn btn-secondary">Закрыть</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// === Мобильное меню ===
+const menuToggle = document.getElementById('menuToggle');
+const sidebar = document.getElementById('sidebar');
+const overlay = document.getElementById('sidebarOverlay');
+
+function toggleSidebar() {
+    sidebar.classList.toggle('open');
+    overlay.classList.toggle('open');
+}
+if (menuToggle) menuToggle.addEventListener('click', toggleSidebar);
+if (overlay) overlay.addEventListener('click', toggleSidebar);
+document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+        if (window.innerWidth <= 768) {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('open');
+        }
+    });
+});
+
+// === Шаринг ===
+function shareFile(path) {
+    fetch('/share/' + path, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('shareUrl').value = data.url;
+            document.getElementById('shareModal').style.display = 'flex';
+        })
+        .catch(() => alert('Не удалось создать ссылку'));
+}
+function copyShareUrl() {
+    const input = document.getElementById('shareUrl');
+    input.select();
+    input.setSelectionRange(0, 99999);
+    document.execCommand('copy');
+    alert('Ссылка скопирована!');
+}
+function closeModal() {
+    document.getElementById('shareModal').style.display = 'none';
+}
+window.addEventListener('click', e => {
+    const modal = document.getElementById('shareModal');
+    if (e.target === modal) closeModal();
+});
+
+// === Drag & Drop ===
+const dragzone = document.getElementById('dragzone');
+const uploadForm = document.getElementById('uploadForm');
+const fileInput = document.getElementById('fileInput');
+
+if (dragzone) {
+    ['dragenter', 'dragover'].forEach(ev => {
+        dragzone.addEventListener(ev, e => {
+            e.preventDefault();
+            dragzone.classList.add('active');
+        });
+    });
+    ['dragleave', 'drop'].forEach(ev => {
+        dragzone.addEventListener(ev, e => {
+            e.preventDefault();
+            dragzone.classList.remove('active');
+        });
+    });
+    dragzone.addEventListener('drop', e => {
+        if (e.dataTransfer.files.length > 0) {
+            fileInput.files = e.dataTransfer.files;
+            uploadForm.submit();
+        }
+    });
+}
+
+// === FAB кнопка ===
+const fabUpload = document.getElementById('fabUpload');
+if (fabUpload && fileInput) {
+    fabUpload.addEventListener('click', () => fileInput.click());
+}
+
+// === Свайп для закрытия сайдбара ===
+let touchStartX = 0;
+document.addEventListener('touchstart', e => {
+    touchStartX = e.touches[0].clientX;
+}, { passive: true });
+document.addEventListener('touchend', e => {
+    const touchEndX = e.changedTouches[0].clientX;
+    const diff = touchEndX - touchStartX;
+    if (window.innerWidth <= 768) {
+        if (diff < -80 && sidebar.classList.contains('open')) {
+            toggleSidebar();
+        }
+    }
+}, { passive: true });
+</script>
+{% endblock %}
