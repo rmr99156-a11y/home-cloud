@@ -37,7 +37,7 @@ SHARED_LINKS_FILE = BASE_DIR / "shared_links.json"
 
 HOST = "127.0.0.1"
 PORT = 8000
-MAX_FILE_SIZE = 1024 * 1024 * 1024  # 1 ГБ на файл
+MAX_FILE_SIZE = 100 * 1024 * 1024 * 1024  # 100 ГБ на файл
 ALLOWED_ALL = True  # разрешить любые расширения
 
 # =======================================================================
@@ -218,7 +218,7 @@ ensure_dirs()
 config = load_config()
 
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = MAX_FILE_SIZE
+app.config["MAX_CONTENT_LENGTH"] = MAX_FILE_SIZE  # 100 ГБ
 app.secret_key = config.get("session_secret", secrets.token_hex(32))
 
 
@@ -315,11 +315,14 @@ def upload():
     target_dir.mkdir(parents=True, exist_ok=True)
 
     if "files" not in request.files:
+        if request.accept_mimetypes.accept_json:
+            return jsonify({"success": False, "error": "Не выбраны файлы для загрузки"}), 400
         flash("Не выбраны файлы для загрузки", "error")
         return redirect(url_for("browse", rel_path=rel_path))
 
     files = request.files.getlist("files")
     success, failed = 0, 0
+    uploaded_names = []
     for f in files:
         if f.filename == "":
             continue
@@ -334,10 +337,24 @@ def upload():
         try:
             f.save(dest)
             success += 1
+            uploaded_names.append(dest.name)
         except Exception as e:
             print(f"Ошибка загрузки {filename}: {e}", file=sys.stderr)
             failed += 1
 
+    # Если запрос через XHR (прогресс-загрузка) — возвращаем JSON
+    if request.accept_mimetypes.accept_json:
+        if success:
+            return jsonify({
+                "success": True,
+                "uploaded": success,
+                "failed": failed,
+                "names": uploaded_names,
+            })
+        else:
+            return jsonify({"success": False, "error": "Не удалось загрузить файлы"}), 500
+
+    # Обычная форма — редирект с flash
     if success:
         flash(f"Загружено файлов: {success}" + (f", ошибок: {failed}" if failed else ""), "success")
     else:
@@ -475,7 +492,9 @@ def settings():
 # =======================================================================
 @app.errorhandler(413)
 def too_large(e):
-    flash("Файл слишком большой (макс. 1 ГБ)", "error")
+    if request.accept_mimetypes.accept_json:
+        return jsonify({"success": False, "error": "Файл слишком большой (макс. 100 ГБ)"}), 413
+    flash("Файл слишком большой (макс. 100 ГБ)", "error")
     return redirect(url_for("browse")), 413
 
 

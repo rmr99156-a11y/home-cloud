@@ -1,6 +1,6 @@
 {
   "username": "admin",
-  "password_hash": "scrypt:32768:8:1$NCi57ENOF5GygTKe$05b6ffc5ac46de648d5376f8f7d3dd1347767baa16ecea1af85a990aac12c541eee5accb5f68c1fa493d7ade475b95122519ff212e144a0e66e870a987e99d12",
+  "password_hash": "scrypt:32768:8:1$7grLkyFFVwJgtGAk$203b1e6027059bdbe64a027cbbd2c2cf7be8f0dc7450d1ca21e63f974dc1e6f3a3d8a2e50138fd0e894e932e8d7cb62000492b9cf49aeaf3ae57bf8a0e666c3b",
   "must_change_password": true,
-  "session_secret": "a9df418c92b55f1d8192c93c60a721a3c54b6e58a5681b87ec2c281ba5130bcc"
+  "session_secret": "27b2fdcb56e1af5744cf76198fc77d3283e7c614480678cda683a50010e1f289"
 }
