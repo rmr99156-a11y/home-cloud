@@ -1100,6 +1100,261 @@ body::before {
     .modal-content { padding: 20px; }
 }
 
+/* ===================================================================
+   ОВЕРЛЕЙ ЗАГРУЗКИ С ПРОГРЕССОМ
+   =================================================================== */
+.upload-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(5, 12, 8, 0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    animation: uploadOverlayIn 0.3s ease;
+}
+
+@keyframes uploadOverlayIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.upload-progress-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    width: 90%;
+    max-width: 480px;
+    box-shadow: var(--shadow-lg);
+    animation: uploadCardIn 0.3s ease;
+    text-align: center;
+}
+
+@keyframes uploadCardIn {
+    from { opacity: 0; transform: translateY(20px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.upload-progress-icon {
+    margin-bottom: 12px;
+    animation: uploadBounce 2s ease-in-out infinite;
+}
+
+@keyframes uploadBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
+
+.upload-progress-title {
+    color: var(--text);
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: 16px;
+}
+
+/* Список загружаемых файлов */
+.upload-file-list {
+    max-height: 120px;
+    overflow-y: auto;
+    margin-bottom: 16px;
+    text-align: left;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+
+.upload-file-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.upload-file-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.upload-file-list::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 2px;
+}
+
+.upload-file-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    transition: background var(--transition);
+}
+
+.upload-file-item:hover {
+    background: var(--primary-soft);
+}
+
+.upload-file-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 65%;
+}
+
+.upload-file-size {
+    flex-shrink: 0;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+}
+
+.upload-file-more {
+    padding: 4px 8px;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    text-align: center;
+}
+
+/* Прогресс-бар */
+.upload-progress-bar-wrap {
+    margin-bottom: 16px;
+}
+
+.upload-progress-bar {
+    width: 100%;
+    height: 10px;
+    background: var(--bg);
+    border-radius: 5px;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid var(--border);
+}
+
+.upload-progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary-dark), var(--primary), var(--accent));
+    border-radius: 5px;
+    transition: width 0.3s ease;
+    position: relative;
+}
+
+.upload-progress-bar-fill::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255,255,255,0.15) 50%,
+        transparent 100%
+    );
+    animation: uploadShimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes uploadShimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.upload-progress-bar-done .upload-progress-bar-fill {
+    background: linear-gradient(90deg, var(--success), var(--accent));
+}
+
+.upload-progress-bar-done .upload-progress-bar-fill::after {
+    animation: none;
+}
+
+.upload-progress-bar-error .upload-progress-bar-fill {
+    background: var(--danger);
+}
+
+.upload-progress-bar-error .upload-progress-bar-fill::after {
+    animation: none;
+}
+
+.upload-progress-percent {
+    font-size: 0.85rem;
+    color: var(--primary);
+    font-weight: 600;
+    margin-top: 6px;
+}
+
+/* Статистика загрузки */
+.upload-stats {
+    display: flex;
+    justify-content: space-around;
+    gap: 12px;
+}
+
+.upload-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.upload-stat-label {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.upload-stat-value {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Ошибка загрузки */
+.upload-error {
+    margin-top: 16px;
+    padding: 10px 14px;
+    background: rgba(248, 113, 113, 0.1);
+    border: 1px solid rgba(248, 113, 113, 0.3);
+    border-radius: var(--radius-sm);
+    color: var(--danger);
+    font-size: 0.9rem;
+}
+
+/* Успешная загрузка */
+.upload-success {
+    margin-top: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 12px;
+    background: rgba(52, 211, 153, 0.1);
+    border: 1px solid rgba(52, 211, 153, 0.3);
+    border-radius: var(--radius-sm);
+    color: var(--success);
+    font-size: 0.95rem;
+    font-weight: 500;
+    animation: uploadSuccessIn 0.4s ease;
+}
+
+@keyframes uploadSuccessIn {
+    from { opacity: 0; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+/* Мобильная адаптация оверлея */
+@media (max-width: 480px) {
+    .upload-progress-card {
+        padding: 24px 18px;
+        width: 95%;
+    }
+    .upload-progress-title {
+        font-size: 1.05rem;
+    }
+    .upload-stats {
+        gap: 6px;
+    }
+    .upload-stat-value {
+        font-size: 0.82rem;
+    }
+}
+
 /* Печать */
 @media print {
     .sidebar, .actions-bar, .menu-toggle, .fab-upload { display: none; }
