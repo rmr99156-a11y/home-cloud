@@ -126,7 +126,7 @@
                     <span class="btn-icon-svg">{{ icon('upload', 16) }}</span>
                     Загрузить
                 </label>
-                <input type="file" name="files" id="fileInput" multiple style="display:none" onchange="document.getElementById('uploadForm').submit()">
+                <input type="file" name="files" id="fileInput" multiple style="display:none">
             </form>
 
             <form method="post" action="{{ url_for('create_folder') }}" class="folder-form">
@@ -294,6 +294,58 @@
     </main>
 </div>
 
+<!-- Оверлей загрузки с прогрессом -->
+<div id="uploadOverlay" class="upload-overlay" style="display:none">
+    <div class="upload-progress-card">
+        <div class="upload-progress-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <path d="M17 8l-5-5-5 5"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+        </div>
+        <h3 class="upload-progress-title">Загрузка файлов</h3>
+
+        <!-- Список файлов -->
+        <div id="uploadFileList" class="upload-file-list"></div>
+
+        <!-- Общий прогресс -->
+        <div class="upload-progress-bar-wrap">
+            <div class="upload-progress-bar">
+                <div class="upload-progress-bar-fill" id="uploadProgressBar" style="width: 0%"></div>
+            </div>
+            <div class="upload-progress-percent" id="uploadPercent">0%</div>
+        </div>
+
+        <!-- Статистика -->
+        <div class="upload-stats">
+            <div class="upload-stat">
+                <span class="upload-stat-label">Скорость</span>
+                <span class="upload-stat-value" id="uploadSpeed">—</span>
+            </div>
+            <div class="upload-stat">
+                <span class="upload-stat-label">Загружено</span>
+                <span class="upload-stat-value" id="uploadLoaded">0 Б</span>
+            </div>
+            <div class="upload-stat">
+                <span class="upload-stat-label">Осталось</span>
+                <span class="upload-stat-value" id="uploadETA">—</span>
+            </div>
+        </div>
+
+        <!-- Сообщение об ошибке -->
+        <div id="uploadError" class="upload-error" style="display:none"></div>
+
+        <!-- Сообщение об успехе -->
+        <div id="uploadSuccess" class="upload-success" style="display:none">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            <span id="uploadSuccessText">Загрузка завершена!</span>
+        </div>
+    </div>
+</div>
+
 <!-- Модальное окно для шаринга -->
 <div id="shareModal" class="modal" style="display:none">
     <div class="modal-content">
@@ -345,8 +397,12 @@ function copyShareUrl() {
     const input = document.getElementById('shareUrl');
     input.select();
     input.setSelectionRange(0, 99999);
-    document.execCommand('copy');
-    alert('Ссылка скопирована!');
+    navigator.clipboard.writeText(input.value).then(() => {
+        alert('Ссылка скопирована!');
+    }).catch(() => {
+        document.execCommand('copy');
+        alert('Ссылка скопирована!');
+    });
 }
 function closeModal() {
     document.getElementById('shareModal').style.display = 'none';
@@ -356,10 +412,228 @@ window.addEventListener('click', e => {
     if (e.target === modal) closeModal();
 });
 
-// === Drag & Drop ===
-const dragzone = document.getElementById('dragzone');
+// === Вспомогательные функции для размера и времени ===
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 Б';
+    const units = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
+}
+
+function formatSpeed(bytesPerSec) {
+    if (bytesPerSec < 1024) return bytesPerSec.toFixed(0) + ' Б/с';
+    if (bytesPerSec < 1024 * 1024) return (bytesPerSec / 1024).toFixed(1) + ' КБ/с';
+    if (bytesPerSec < 1024 * 1024 * 1024) return (bytesPerSec / (1024 * 1024)).toFixed(1) + ' МБ/с';
+    return (bytesPerSec / (1024 * 1024 * 1024)).toFixed(2) + ' ГБ/с';
+}
+
+function formatETA(seconds) {
+    if (!isFinite(seconds) || seconds < 0) return '—';
+    if (seconds < 60) return Math.round(seconds) + ' сек';
+    if (seconds < 3600) {
+        const m = Math.floor(seconds / 60);
+        const s = Math.round(seconds % 60);
+        return m + ' мин ' + s + ' сек';
+    }
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return h + ' ч ' + m + ' мин';
+}
+
+// === Загрузка файлов с прогрессом ===
 const uploadForm = document.getElementById('uploadForm');
 const fileInput = document.getElementById('fileInput');
+const uploadOverlay = document.getElementById('uploadOverlay');
+const uploadProgressBar = document.getElementById('uploadProgressBar');
+const uploadPercent = document.getElementById('uploadPercent');
+const uploadSpeedEl = document.getElementById('uploadSpeed');
+const uploadLoadedEl = document.getElementById('uploadLoaded');
+const uploadETAEl = document.getElementById('uploadETA');
+const uploadFileListEl = document.getElementById('uploadFileList');
+const uploadErrorEl = document.getElementById('uploadError');
+const uploadSuccessEl = document.getElementById('uploadSuccess');
+const uploadSuccessText = document.getElementById('uploadSuccessText');
+
+let isUploading = false;
+
+function startUpload(files) {
+    if (isUploading || !files || files.length === 0) return;
+    isUploading = true;
+
+    // Сброс UI
+    uploadProgressBar.style.width = '0%';
+    uploadPercent.textContent = '0%';
+    uploadSpeedEl.textContent = '—';
+    uploadLoadedEl.textContent = '0 Б';
+    uploadETAEl.textContent = '—';
+    uploadErrorEl.style.display = 'none';
+    uploadSuccessEl.style.display = 'none';
+    uploadProgressBar.classList.remove('upload-progress-bar-error');
+    uploadProgressBar.classList.remove('upload-progress-bar-done');
+
+    // Показать список файлов
+    uploadFileListEl.innerHTML = '';
+    let totalSize = 0;
+    for (let i = 0; i < files.length; i++) {
+        totalSize += files[i].size;
+        const fileEl = document.createElement('div');
+        fileEl.className = 'upload-file-item';
+        fileEl.innerHTML = '<span class="upload-file-name">' + escapeHtml(files[i].name) + '</span>' +
+                           '<span class="upload-file-size">' + formatBytes(files[i].size) + '</span>';
+        uploadFileListEl.appendChild(fileEl);
+    }
+
+    // Ограничим показ файлов (если их очень много)
+    if (files.length > 10) {
+        const moreEl = document.createElement('div');
+        moreEl.className = 'upload-file-more';
+        moreEl.textContent = '...и ещё ' + (files.length - 10) + ' файлов (всего ' + formatBytes(totalSize) + ')';
+        uploadFileListEl.appendChild(moreEl);
+    }
+
+    // Показать оверлей
+    uploadOverlay.style.display = 'flex';
+
+    // Собрать FormData
+    const formData = new FormData();
+    const pathInput = uploadForm.querySelector('input[name="path"]');
+    formData.append('path', pathInput ? pathInput.value : '');
+    for (let i = 0; i < files.length; i++) {
+        formData.append('files', files[i]);
+    }
+
+    // XHR с прогрессом
+    const xhr = new XMLHttpRequest();
+    let startTime = null;
+    let lastLoaded = 0;
+    let lastTime = 0;
+    let speedSamples = [];
+
+    xhr.upload.addEventListener('loadstart', function() {
+        startTime = Date.now();
+        lastTime = startTime;
+    });
+
+    xhr.upload.addEventListener('progress', function(e) {
+        if (!e.lengthComputable) return;
+
+        const now = Date.now();
+        const elapsed = now - startTime;
+        const loaded = e.loaded;
+        const total = e.total;
+
+        // Процент
+        const pct = Math.min(100, Math.round((loaded / total) * 100));
+        uploadProgressBar.style.width = pct + '%';
+        uploadPercent.textContent = pct + '%';
+
+        // Скорость (используем скользящее окно для сглаживания)
+        const dt = (now - lastTime) / 1000; // секунды
+        if (dt > 0.15) { // обновляем каждые ~150мс
+            const dLoaded = loaded - lastLoaded;
+            const instantSpeed = dLoaded / dt;
+            speedSamples.push(instantSpeed);
+            if (speedSamples.length > 20) speedSamples.shift(); // храним последние 20 замеров
+
+            // Средняя скорость по замерам
+            const avgSpeed = speedSamples.reduce((a, b) => a + b, 0) / speedSamples.length;
+
+            uploadSpeedEl.textContent = formatSpeed(avgSpeed);
+            uploadLoadedEl.textContent = formatBytes(loaded) + ' / ' + formatBytes(total);
+
+            // ETA
+            if (avgSpeed > 0) {
+                const remaining = (total - loaded) / avgSpeed;
+                uploadETAEl.textContent = formatETA(remaining);
+            }
+
+            lastLoaded = loaded;
+            lastTime = now;
+        }
+    });
+
+    xhr.addEventListener('load', function() {
+        isUploading = false;
+        if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+                const resp = JSON.parse(xhr.responseText);
+                if (resp.success) {
+                    uploadProgressBar.style.width = '100%';
+                    uploadPercent.textContent = '100%';
+                    uploadSpeedEl.textContent = 'Готово';
+                    uploadETAEl.textContent = '0 сек';
+                    uploadProgressBar.classList.add('upload-progress-bar-done');
+
+                    const failedText = resp.failed > 0 ? ', ошибок: ' + resp.failed : '';
+                    uploadSuccessText.textContent = 'Загружено файлов: ' + resp.uploaded + failedText;
+                    uploadSuccessEl.style.display = 'flex';
+
+                    // Авто-закрытие и перезагрузка через 2 сек
+                    setTimeout(function() {
+                        uploadOverlay.style.display = 'none';
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    showError(resp.error || 'Не удалось загрузить файлы');
+                }
+            } catch(e) {
+                // Если сервер вернул не JSON (redirect), просто перезагрузим
+                window.location.reload();
+            }
+        } else if (xhr.status === 413) {
+            try {
+                const resp = JSON.parse(xhr.responseText);
+                showError(resp.error || 'Файл слишком большой (макс. 100 ГБ)');
+            } catch(e) {
+                showError('Файл слишком большой (макс. 100 ГБ)');
+            }
+        } else {
+            showError('Ошибка сервера (код ' + xhr.status + ')');
+        }
+    });
+
+    xhr.addEventListener('error', function() {
+        isUploading = false;
+        showError('Сетевая ошибка при загрузке');
+    });
+
+    xhr.addEventListener('abort', function() {
+        isUploading = false;
+        showError('Загрузка отменена');
+    });
+
+    xhr.open('POST', uploadForm.action);
+    xhr.setRequestHeader('Accept', 'application/json');
+    xhr.send(formData);
+}
+
+function showError(msg) {
+    uploadErrorEl.textContent = msg;
+    uploadErrorEl.style.display = 'block';
+    uploadProgressBar.classList.add('upload-progress-bar-error');
+    // Кнопка закрытия
+    setTimeout(function() {
+        uploadOverlay.style.display = 'none';
+    }, 4000);
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Клик по кнопке "Загрузить" — выбор файлов
+if (fileInput) {
+    fileInput.addEventListener('change', function() {
+        if (this.files && this.files.length > 0) {
+            startUpload(this.files);
+        }
+    });
+}
+
+// Drag & Drop
+const dragzone = document.getElementById('dragzone');
 
 if (dragzone) {
     ['dragenter', 'dragover'].forEach(ev => {
@@ -376,16 +650,42 @@ if (dragzone) {
     });
     dragzone.addEventListener('drop', e => {
         if (e.dataTransfer.files.length > 0) {
-            fileInput.files = e.dataTransfer.files;
-            uploadForm.submit();
+            startUpload(e.dataTransfer.files);
         }
     });
 }
 
-// === FAB кнопка ===
+// FAB кнопка
 const fabUpload = document.getElementById('fabUpload');
 if (fabUpload && fileInput) {
     fabUpload.addEventListener('click', () => fileInput.click());
+}
+
+// Drag & Drop на весь main (для больших файлов)
+const mainContent = document.querySelector('.main-content');
+if (mainContent) {
+    let dragCounter = 0;
+    mainContent.addEventListener('dragenter', function(e) {
+        e.preventDefault();
+        dragCounter++;
+        if (dragzone) dragzone.classList.add('active');
+    });
+    mainContent.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        dragCounter--;
+        if (dragCounter === 0 && dragzone) dragzone.classList.remove('active');
+    });
+    mainContent.addEventListener('dragover', function(e) {
+        e.preventDefault();
+    });
+    mainContent.addEventListener('drop', function(e) {
+        e.preventDefault();
+        dragCounter = 0;
+        if (dragzone) dragzone.classList.remove('active');
+        if (e.dataTransfer.files.length > 0) {
+            startUpload(e.dataTransfer.files);
+        }
+    });
 }
 
 // === Свайп для закрытия сайдбара ===
